@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"context"
+	"path"
 
 	"github.com/ovrclk/akash/cmd/common"
 	"github.com/spf13/cobra"
@@ -30,11 +31,9 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Listen to the chain and configuration directory and print those events",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return common.RunForever(PrintChainAndFSEvents)
+		return common.RunForever(func(ctx context.Context) error {
+			dirs := []string{homePath, path.Join(homePath, "deployments")}
+			return ChainAndFSEmitter(dirs)(ctx, PrintHandler)
+		})
 	},
-}
-
-// PrintChainAndFSEvents prints for all events created by this stream
-func PrintChainAndFSEvents(ctx context.Context) error {
-	return WatchForChainAndFSEvents(ctx, PrintBusEvents)
 }

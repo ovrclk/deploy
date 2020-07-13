@@ -5,131 +5,142 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/jackzampolin/deploy/pathevents"
-	"github.com/ovrclk/akash/events"
 	"github.com/ovrclk/akash/provider/gateway"
 	"github.com/ovrclk/akash/provider/manifest"
 	"github.com/ovrclk/akash/pubsub"
-	"github.com/ovrclk/akash/sdl"
 	dtypes "github.com/ovrclk/akash/x/deployment/types"
 	mtypes "github.com/ovrclk/akash/x/market/types"
 	pmodule "github.com/ovrclk/akash/x/provider"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
-	"golang.org/x/sync/errgroup"
 	"gopkg.in/fsnotify.v1"
 )
 
-// WatchForChainAndFSEvents watches for a set of chain and filesystem
-// events and takes actions based on them.
-func WatchForChainAndFSEvents(ctx context.Context, ehs ...EventHandler) error {
-	// Start the filesystem watcher
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-	defer watcher.Close()
+// EventHandler is a type of function that handles events coming out of the event bus
+type EventHandler func(pubsub.Event) error
 
-	// Instantiate and start tendermint RPC client
-	client := config.NewTMClient()
-	if err = client.Start(); err != nil {
-		return err
-	}
+// SendManifestHander sends manifests on the lease created event
+func SendManifestHander(dd *DeploymentData, client *rpchttp.HTTP) func(pubsub.Event) error {
+	return func(ev pubsub.Event) (err error) {
+		addr := config.GetAccAddress()
+		log := logger.With("action", "send-manifest")
+		switch event := ev.(type) {
+		// Handle Lease creation events
+		case mtypes.EventLeaseCreated:
+			if addr.Equals(event.ID.Owner) {
+				pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(client))
+				provider, err := pclient.Provider(event.ID.Provider)
+				if err != nil {
+					return err
+				}
 
-	// Start the pubsub bus
-	bus := pubsub.NewBus()
-	defer bus.Close()
-
-	// Initialize a new error group
-	group, ctx := errgroup.WithContext(ctx)
-
-	// Publish chain events to the pubsub bus
-	group.Go(func() error {
-		return events.Publish(ctx, client, "akash-deploy", bus)
-	})
-
-	// Publish filesystem events to the bus
-	group.Go(func() error {
-		return pathevents.Publish(ctx, watcher, []string{
-			homePath,
-			path.Join(homePath, "deployments"),
-		}, bus)
-	})
-
-	// Subscribe to the bus events
-	subscriber, err := bus.Subscribe()
-	if err != nil {
-		return err
-	}
-
-	// Handle all the events coming out of the bus
-	group.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-subscriber.Done():
-				return nil
-			case ev := <-subscriber.Events():
-				for _, eh := range ehs {
-					if err = eh(ev, client); err != nil {
-						return err
-					}
+				log.Info("sending manifest to provider", "provider", event.ID.Provider, "uri", provider.HostURI, "dseq", event.ID.DSeq)
+				if err = gateway.NewClient().SubmitManifest(
+					context.Background(),
+					provider.HostURI,
+					&manifest.SubmitRequest{
+						Deployment: event.ID.DeploymentID(),
+						Manifest:   dd.Manifest,
+					},
+				); err != nil {
+					return err
 				}
 			}
 		}
-	})
-
-	return group.Wait()
+		return
+	}
 }
 
-// EventHandler is a type of function that handles events coming out of the event bus
-type EventHandler func(pubsub.Event, *rpchttp.HTTP) error
-
-// SendManifestHander sends manifests on the lease created event
-func SendManifestHander(ev pubsub.Event, client *rpchttp.HTTP) (err error) {
-	addr := config.GetAccAddress()
-	log := logger.With("action", "send-manifest")
-	switch event := ev.(type) {
-	// Handle Lease creation events
-	case mtypes.EventLeaseCreated:
-		if addr.Equals(event.ID.Owner) {
-			pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(client))
-			provider, err := pclient.Provider(event.ID.Provider)
-			if err != nil {
-				return err
+// DeploymentDataUpdateHandler updates a DeploymentData and prints relevant events
+func DeploymentDataUpdateHandler(dd *DeploymentData) func(pubsub.Event) error {
+	return func(ev pubsub.Event) (err error) {
+		addr := dd.DeploymentID.Owner
+		log := logger.With("addr", addr, "dseq", dd.DeploymentID.DSeq)
+		switch event := ev.(type) {
+		// Handle deployment creation events
+		case dtypes.EventDeploymentCreated:
+			if event.ID.Equals(dd.DeploymentID) {
+				log.Info("deployment created")
 			}
+			return
 
-			manifestFile := fmt.Sprintf("%s.%d.yaml", addr.String(), event.ID.DSeq)
-			dep, err := sdl.ReadFile(path.Join(homePath, "deployments", manifestFile))
-			if err != nil {
-				return err
+		// Handle deployment update events
+		case dtypes.EventDeploymentUpdated:
+			if event.ID.Equals(dd.DeploymentID) {
+				log.Info("deployment updated")
 			}
+			return
 
-			mani, err := dep.Manifest()
-			if err != nil {
-				return err
+		// Handle deployment close events
+		case dtypes.EventDeploymentClosed:
+			if event.ID.Equals(dd.DeploymentID) {
+				// TODO: Maybe we should exit here as the tracked deployment is now closed?
+				log.Info("deployment closed")
 			}
+			return
 
-			gclient := gateway.NewClient()
-
-			log.Info("sending manifest to provider", "provider", event.ID.Provider, "uri", provider.HostURI, "dseq", event.ID.DSeq)
-			if err = gclient.SubmitManifest(
-				context.Background(),
-				provider.HostURI,
-				&manifest.SubmitRequest{
-					Deployment: event.ID.DeploymentID(),
-					Manifest:   mani,
-				},
-			); err != nil {
-				return err
+		// Handle deployment group close events
+		case dtypes.EventGroupClosed:
+			if event.ID.Owner.Equals(addr) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				// TODO: Maybe more housekeeping here?
+				log.Info("deployment group closed")
 			}
+			return
+
+		// Handle Order creation events
+		case mtypes.EventOrderCreated:
+			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				dd.AddOrder(event.ID)
+				log.Info("order for deployment created", "oseq", event.ID.OSeq)
+			}
+			return
+
+		// Handle Order close events
+		case mtypes.EventOrderClosed:
+			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				dd.RemoveOrder(event.ID)
+				log.Info("order for deployment closed", "oseq", event.ID.OSeq)
+			}
+			return
+
+		// Handle Bid creation events
+		case mtypes.EventBidCreated:
+			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				log.Info("bid for order created", "oseq", event.ID.OSeq, "price", event.Price)
+			}
+			return
+
+		// Handle Bid close events
+		case mtypes.EventBidClosed:
+			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				log.Info("bid for order closed", "oseq", event.ID.OSeq, "price", event.Price)
+			}
+			return
+
+		// Handle Lease creation events
+		case mtypes.EventLeaseCreated:
+			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				dd.AddLease(event.ID)
+				log.Info("lease for order created", "oseq", event.ID.OSeq, "price", event.Price)
+			}
+			return
+
+		// Handle Lease close events
+		case mtypes.EventLeaseClosed:
+			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+				dd.RemoveLease(event.ID)
+				log.Info("lease for order closed", "oseq", event.ID.OSeq, "price", event.Price)
+			}
+			return
+
+			// In any other case we should exit with error
+		default:
+			return fmt.Errorf("should be unreachable code, exit with this error")
 		}
 	}
-	return
 }
 
-// PrintBusEvents prints all the events
-func PrintBusEvents(ev pubsub.Event, client *rpchttp.HTTP) (err error) {
+// PrintHandler prints all the events
+func PrintHandler(ev pubsub.Event) (err error) {
 	addr := config.GetAccAddress()
 	log := logger.With("addr", addr)
 	switch event := ev.(type) {

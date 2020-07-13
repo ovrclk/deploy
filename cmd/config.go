@@ -217,6 +217,15 @@ func (c *Config) BroadcastTxCommit(txBytes []byte) (sdk.TxResponse, error) {
 	return c.CLICtx(c.NewTMClient()).BroadcastTxCommit(txBytes)
 }
 
+// BlockHeight returns the current block height from the configured client
+func (c *Config) BlockHeight() (uint64, error) {
+	status, err := c.NewTMClient().Status()
+	if err != nil {
+		return 0, err
+	}
+	return uint64(status.SyncInfo.LatestBlockHeight), nil
+}
+
 func overWriteConfig(cmd *cobra.Command, cfg *Config) (err error) {
 	if _, err = os.Stat(cfgPath); err == nil {
 		viper.SetConfigFile(cfgPath)
