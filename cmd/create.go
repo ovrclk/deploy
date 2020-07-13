@@ -28,6 +28,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+func init() {
+	rootCmd.AddCommand(createCmd())
+}
+
 // createCmd represents the create command
 func createCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -55,22 +59,36 @@ func createCmd() *cobra.Command {
 				return err
 			}
 
+			// Default DSeq to the current block height
+			if id.DSeq == 0 {
+				if id.DSeq, err = dcli.CurrentBlockHeight(config.CLICtx(config.NewTMClient())); err != nil {
+					return err
+				}
+			}
+
 			ctx, _ := context.WithCancel(context.Background())
 			group, _ := errgroup.WithContext(ctx)
 
 			group.Go(func() error {
-				return WatchForChainAndFSEvents(ctx)
+				if err = WatchForChainAndFSEvents(ctx, PrintBusEvents, SendManifestHander); err != nil {
+					fmt.Println("in watch for chains and fs events")
+				}
+				return err
 			})
 
 			group.Go(func() error {
-				return createDeploymentFromFile(groups, id)
+				if err = txCreateDeployment(groups, id); err != nil {
+					fmt.Println("in tx create deployemtn")
+				}
+				return err
 			})
 
 			group.Go(func() error {
-				return createDeploymentFileInArchive(file, id)
+				if err = createDeploymentFileInArchive(file, id); err != nil {
+					fmt.Println("in create archive")
+				}
+				return err
 			})
-
-			// TODO: create deployment file in local database
 
 			// TODO: One more goroutine to wait for the site to be available and call cancel
 
@@ -82,28 +100,16 @@ func createCmd() *cobra.Command {
 }
 
 func createDeploymentFileInArchive(file []byte, id dtypes.DeploymentID) error {
-	fileName := fmt.Sprintf("%s.%s.yaml", id.Owner, id.DSeq)
+	fileName := fmt.Sprintf("%s.%d.yaml", id.Owner, id.DSeq)
 	return ioutil.WriteFile(path.Join(homePath, "deployments", fileName), file, 666)
 }
 
-func createDeploymentFromFile(groups []*dtypes.GroupSpec, id dtypes.DeploymentID) (err error) {
-	ctx := config.CLICtx(config.NewTMClient())
-
-	// Default DSeq to the current block height
-	if id.DSeq == 0 {
-		if id.DSeq, err = dcli.CurrentBlockHeight(ctx); err != nil {
-			return err
-		}
-	}
-
+func txCreateDeployment(groups []*dtypes.GroupSpec, id dtypes.DeploymentID) (err error) {
 	res, err := config.SendMsgs([]sdk.Msg{dtypes.NewMsgCreateDeployment(id, groups)})
-	if err != nil {
+	if err != nil || res.Code != 0 {
 		return err
 	}
 
-	return ctx.PrintOutput(res)
-}
-
-func init() {
-	rootCmd.AddCommand(createCmd())
+	logger.Info("create-deployment tx sent successfully", "hash", res.TxHash, "code", res.Code, "dseq", id.DSeq)
+	return nil
 }

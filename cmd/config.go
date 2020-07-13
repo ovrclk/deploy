@@ -49,7 +49,7 @@ func (c *Config) CLICtx(client *rpchttp.HTTP) cctx.CLIContext {
 		Output:        os.Stdout,
 		OutputFormat:  "json",
 		From:          defaultKey,
-		BroadcastMode: "block",
+		BroadcastMode: "sync",
 		FromName:      defaultKey,
 		Codec:         c.Amino,
 		TrustNode:     true,

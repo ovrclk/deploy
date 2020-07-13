@@ -20,6 +20,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/tendermint/tendermint/libs/log"
 )
 
 var (
@@ -37,6 +38,9 @@ var (
 
 	// defaultHome is the default location for the home folder
 	defaultHome = os.ExpandEnv("$HOME/.akash-deploy")
+
+	// logger is the logger for the application
+	logger = log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 )
 
 // rootCmd represents the base command when called without any subcommands

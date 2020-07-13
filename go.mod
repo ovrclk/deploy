@@ -4,7 +4,6 @@ go 1.14
 
 require (
 	github.com/cosmos/cosmos-sdk v0.38.5
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/ovrclk/akash v0.7.7
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/viper v1.7.0
@@ -15,4 +14,5 @@ require (
 )
 
 replace github.com/keybase/go-keychain => github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4
+
 replace github.com/ovrclk/akash => /Users/johnzampolin/go/src/github.com/ovrclk/akash

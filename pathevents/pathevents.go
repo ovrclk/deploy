@@ -3,15 +3,17 @@ package pathevents
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/ovrclk/akash/pubsub"
+	"github.com/tendermint/tendermint/libs/log"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/fsnotify.v1"
 )
 
 // Publish publishes filesystem events for pth and path.Join(pth, 'deployments') to the passed bus
 func Publish(ctx context.Context, watcher *fsnotify.Watcher, pths []string, bus pubsub.Bus) error {
+	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout)).With("module", "fsevents")
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		var err error
@@ -38,10 +40,11 @@ func Publish(ctx context.Context, watcher *fsnotify.Watcher, pths []string, bus 
 
 	var err error
 	for _, pth := range pths {
-		log.Printf("Watching files in path %s", pth)
 		if err = watcher.Add(pth); err != nil {
+			logger.Error("failed to watch path", "error", err.Error(), "path", pth)
 			return err
 		}
+		logger.Info("watching files", "path", pth)
 	}
 
 	return group.Wait()
