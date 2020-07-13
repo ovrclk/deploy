@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/jackzampolin/deploy/pathevents"
+	"github.com/ovrclk/akash/events"
 	"github.com/ovrclk/akash/provider/gateway"
 	"github.com/ovrclk/akash/provider/manifest"
 	"github.com/ovrclk/akash/pubsub"
@@ -13,8 +15,72 @@ import (
 	mtypes "github.com/ovrclk/akash/x/market/types"
 	pmodule "github.com/ovrclk/akash/x/provider"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/fsnotify.v1"
 )
+
+// WatchForChainAndFSEvents watches for a set of chain and filesystem
+// events and takes actions based on them.
+func WatchForChainAndFSEvents(ctx context.Context, ehs ...EventHandler) error {
+	// Start the filesystem watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	defer watcher.Close()
+
+	// Instantiate and start tendermint RPC client
+	client := config.NewTMClient()
+	if err = client.Start(); err != nil {
+		return err
+	}
+
+	// Start the pubsub bus
+	bus := pubsub.NewBus()
+	defer bus.Close()
+
+	// Initialize a new error group
+	group, ctx := errgroup.WithContext(ctx)
+
+	// Publish chain events to the pubsub bus
+	group.Go(func() error {
+		return events.Publish(ctx, client, "akash-deploy", bus)
+	})
+
+	// Publish filesystem events to the bus
+	group.Go(func() error {
+		return pathevents.Publish(ctx, watcher, []string{
+			homePath,
+			path.Join(homePath, "deployments"),
+		}, bus)
+	})
+
+	// Subscribe to the bus events
+	subscriber, err := bus.Subscribe()
+	if err != nil {
+		return err
+	}
+
+	// Handle all the events coming out of the bus
+	group.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-subscriber.Done():
+				return nil
+			case ev := <-subscriber.Events():
+				for _, eh := range ehs {
+					if err = eh(ev, client); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	})
+
+	return group.Wait()
+}
 
 // EventHandler is a type of function that handles events coming out of the event bus
 type EventHandler func(pubsub.Event, *rpchttp.HTTP) error
