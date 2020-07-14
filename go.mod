@@ -6,6 +6,7 @@ require (
 	github.com/cosmos/cosmos-sdk v0.38.5
 	github.com/ovrclk/akash v0.7.7
 	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.0
 	github.com/tendermint/tendermint v0.33.6
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e

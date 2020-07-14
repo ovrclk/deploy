@@ -73,6 +73,14 @@ func (dd *DeploymentData) RemoveOrder(order mtypes.OrderID) {
 	dd.OrderID = out
 }
 
+// Leases returns a copy of the LeaseIDs tracked
+func (dd *DeploymentData) Leases() []mtypes.LeaseID {
+	dd.RLock()
+	defer dd.RUnlock()
+	out := dd.LeaseID
+	return out
+}
+
 // AddLease adds a lease for tracking
 func (dd *DeploymentData) AddLease(lease mtypes.LeaseID) {
 	dd.Lock()

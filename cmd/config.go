@@ -243,7 +243,7 @@ func overWriteConfig(cmd *cobra.Command, cfg *Config) (err error) {
 			}
 
 			// overwrite the config file
-			err = ioutil.WriteFile(viper.ConfigFileUsed(), out, 0666)
+			err = ioutil.WriteFile(viper.ConfigFileUsed(), out, 0777)
 			if err != nil {
 				return err
 			}

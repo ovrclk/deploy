@@ -11,7 +11,6 @@ import (
 	dtypes "github.com/ovrclk/akash/x/deployment/types"
 	mtypes "github.com/ovrclk/akash/x/market/types"
 	pmodule "github.com/ovrclk/akash/x/provider"
-	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 	"gopkg.in/fsnotify.v1"
 )
 
@@ -19,7 +18,7 @@ import (
 type EventHandler func(pubsub.Event) error
 
 // SendManifestHander sends manifests on the lease created event
-func SendManifestHander(dd *DeploymentData, client *rpchttp.HTTP) func(pubsub.Event) error {
+func SendManifestHander(dd *DeploymentData) func(pubsub.Event) error {
 	return func(ev pubsub.Event) (err error) {
 		addr := config.GetAccAddress()
 		log := logger.With("action", "send-manifest")
@@ -27,7 +26,7 @@ func SendManifestHander(dd *DeploymentData, client *rpchttp.HTTP) func(pubsub.Ev
 		// Handle Lease creation events
 		case mtypes.EventLeaseCreated:
 			if addr.Equals(event.ID.Owner) {
-				pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(client))
+				pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(config.NewTMClient()))
 				provider, err := pclient.Provider(event.ID.Provider)
 				if err != nil {
 					return err

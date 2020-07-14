@@ -18,10 +18,15 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
+	"strings"
+	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ovrclk/akash/provider/gateway"
 	dcli "github.com/ovrclk/akash/x/deployment/client/cli"
+	pmodule "github.com/ovrclk/akash/x/provider"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -43,12 +48,12 @@ func createCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, _ := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(context.Background())
 			group, _ := errgroup.WithContext(ctx)
 
 			// Listen to on chain events and send the manifest when required
 			group.Go(func() error {
-				if err = ChainEmitter(ctx, DeploymentDataUpdateHandler(dd), SendManifestHander(dd, config.NewTMClient())); err != nil {
+				if err = ChainEmitter(ctx, DeploymentDataUpdateHandler(dd), SendManifestHander(dd)); err != nil {
 					log.Error("error watching events", err)
 				}
 				return err
@@ -56,7 +61,7 @@ func createCmd() *cobra.Command {
 
 			// Store the deployment manifest in the archive
 			group.Go(func() error {
-				if err = createDeploymentFileInArchive(dd); err != nil {
+				if err = config.CreateDeploymentFileInArchive(dd); err != nil {
 					log.Error("error updating archive", err)
 				}
 				return err
@@ -64,7 +69,7 @@ func createCmd() *cobra.Command {
 
 			// Send the deployment creation transaction
 			group.Go(func() error {
-				if err = txCreateDeployment(dd); err != nil {
+				if err = config.TxCreateDeployment(dd); err != nil {
 					log.Error("error creating deployment", err)
 				}
 				return err
@@ -72,7 +77,7 @@ func createCmd() *cobra.Command {
 
 			// Wait for the leases to be created and then start polling the provider for service availability
 			group.Go(func() error {
-				if err = waitForLeasesAndPollService(); err != nil {
+				if err = config.WaitForLeasesAndPollService(dd, cancel); err != nil {
 					log.Error("error listening for service", err)
 				}
 				return err
@@ -85,22 +90,72 @@ func createCmd() *cobra.Command {
 	return cmd
 }
 
-func waitForLeasesAndPollService() error {
-	return nil
+// WaitForLeasesAndPollService waits for
+func (c *Config) WaitForLeasesAndPollService(dd *DeploymentData, cancel context.CancelFunc) error {
+	log := logger
+	pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(config.NewTMClient()))
+	timeout := time.After(90 * time.Second)
+	tick := time.Tick(500 * time.Millisecond)
+	for {
+		select {
+		case <-timeout:
+			log.Info("timed out (90s) listening for deployment to be available")
+			cancel()
+			return nil
+		case <-tick:
+			if dd.ExpectedLeases() {
+				for _, l := range dd.Leases() {
+					p, err := pclient.Provider(l.Provider)
+					if err != nil {
+						return fmt.Errorf("error querying provider: %w", err)
+					}
+					// TODO: Move to using service status here?
+					ls, err := gateway.NewClient().LeaseStatus(context.Background(), p.HostURI, l)
+					if err != nil {
+						return fmt.Errorf("error querying lease status: %w", err)
+					}
+
+					for _, s := range ls.Services {
+						// TODO: Much better logging/ux could be put in here: waiting, timeouts etc...
+						if s.Available == s.Total {
+							log.Info(strings.Join(s.URIs, ","), "name", s.Name, "available", s.Available)
+							cancel()
+							return nil
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
-func createDeploymentFileInArchive(dd *DeploymentData) error {
+// CreateDeploymentFileInArchive creates the deployment file in the `$HOME/.akash-deploy/deployments/` folder
+func (c *Config) CreateDeploymentFileInArchive(dd *DeploymentData) error {
 	fileName := fmt.Sprintf("%s.%d.yaml", dd.DeploymentID.Owner, dd.DeploymentID.DSeq)
-	return ioutil.WriteFile(path.Join(homePath, "deployments", fileName), dd.SDLFile, 666)
+	depDir := path.Join(homePath, "deployments")
+	if _, err := os.Stat(depDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(depDir, 0777); err != nil {
+			return err
+		}
+	}
+	return ioutil.WriteFile(path.Join(depDir, fileName), dd.SDLFile, 644)
 }
 
-func txCreateDeployment(dd *DeploymentData) (err error) {
-	res, err := config.SendMsgs([]sdk.Msg{dd.MsgCreate()})
+// TxCreateDeployment takes DeploymentData and creates the specified deployment
+func (c *Config) TxCreateDeployment(dd *DeploymentData) (err error) {
+	res, err := c.SendMsgs([]sdk.Msg{dd.MsgCreate()})
+	log := logger.With(
+		"hash", res.TxHash,
+		"code", res.Code,
+		"action", "create-deployment",
+		"dseq", dd.DeploymentID.DSeq,
+	)
+
 	if err != nil || res.Code != 0 {
-		logger.Error("create-deployment tx failed", "hash", res.TxHash, "code", res.Code, "dseq", dd.DeploymentID.DSeq)
+		log.Error("tx failed")
 		return err
 	}
 
-	logger.Info("create-deployment tx sent successfully", "hash", res.TxHash, "code", res.Code, "dseq", dd.DeploymentID.DSeq)
+	log.Info("tx sent successfully")
 	return nil
 }
