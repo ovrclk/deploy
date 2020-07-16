@@ -33,3 +33,12 @@ deploy create deployment.yaml
 
 # You app will be available at: http://hello.localhost!
 ```
+
+### TODOS:
+
+- [ ] Give the deployments user generated names
+- [ ] Add crud for the sdl file database
+- [ ] Add git integration to allow for easy storage of the configuration directory of this repository
+- [ ] Embed some sample deployments into the binary :thinking_face:
+- [ ] Add management for full on-chain deployment lifecycle 
+- [ ] Queries for some state?
