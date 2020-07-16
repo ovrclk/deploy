@@ -28,8 +28,8 @@ make install-deps
 make demo
 
 # Then you can start deploying apps!
-# Try the `deployment.yaml` file in the root of the repo...
-deploy create deployment.yaml
+# Try the `sample.yaml` file in the root of the repo...
+deploy create sample.yaml
 
 # You app will be available at: http://hello.localhost!
 ```
