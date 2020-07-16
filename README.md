@@ -1,37 +1,35 @@
 # Deploy
 
-Deploy is a prototype for exploring what it would look like to have a watcher daemon for user deployments.
+> NOTE: :dragon: WIP :dragon: Please :dragon: Open :dragon: Issues :dragon: You :dragon: Find :dragon:
 
-To use it run the following:
+`deploy` is a command line client for deploying applications on the [Akash Network](https://akash.network). It also contains a full demo environment to help users develop their [SDL files](https://docs.akash.network/usage/sdl) for deployment on the live network (test or otherwise).
 
-Terminal 1
+### Requirements
+
+* Docker installed and running
+    - [Install Docker](https://docs.docker.com/get-docker/)
+* Go 1.14+ installed and `$GOPATH` + `$GOBIN` setup
+    - [Install Go](https://golang.org/doc/install)
+
+### Running the demo environment
+
+The demo environment sets up:
+* A kubernetes cluster in docker using [`kind`](https://github.com/kubernetes-sigs/kind)
+* A running [Akash chain instance](https://github.com/ovrclk/akash)
+
+> NOTE: The kube cluster, especially on the first run pulls quite a bit of data locally. Depending on your connection this may take a while.
+
 ```bash
-cd $GOPATH/src/github.com/ovrclk/akash/_run/kube
-make clean init node-run
-# let the node output stream here
-```
+# First, if you haven't, install the dependancies
+make install-deps
 
-Terminal 2
-```bash
-cd $GOPATH/src/github.com/ovrclk/akash/_run/kube
-KIND_CONFIG=kind-config-80.yaml make kind-cluster-delete kind-cluster-create
-# wait for it to finish
-../../akashctl --home ./cache/client keys export main
-# finish the prompts (pw: 12345678) and save the key output in your clipboard :shushing_face:
-make provider-create provider-run
-# let the provider logs stream here
-```
+# Then start the demo environment
+# NOTE: this can take a while, please wait for the command to finish
+make demo
 
-Terminal 3
-```bash
-# from the root of this directory
-mkdir ~/.akash-deploy && cat <<EOT >> ~/.akash-deploy/config.toml
-chain-id: "local"
-rpc-addr: "http://localhost:26657"
-keyfile: "key.priv"
-keypass: "12345678"
-EOT
+# Then you can start deploying apps!
+# Try the `deployment.yaml` file in the root of the repo...
+deploy create deployment.yaml
 
-# paste the key output into the keyfile
-pbpaste > ~/.akash-deploy/key.priv
+# You app will be available at: http://hello.localhost!
 ```

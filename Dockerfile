@@ -12,9 +12,6 @@ RUN apk add --update git && \
 # Copy in application files
 COPY . .
 
-# Package Static Assets
-RUN statik -src static/
-
 # Build binary
 RUN go build -mod=readonly -o build/deploy cmd/*.go
 

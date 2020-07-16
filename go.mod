@@ -3,6 +3,7 @@ module github.com/jackzampolin/deploy
 go 1.14
 
 require (
+	github.com/avast/retry-go v2.6.0+incompatible
 	github.com/cosmos/cosmos-sdk v0.38.5
 	github.com/ovrclk/akash v0.7.7
 	github.com/spf13/cobra v1.0.0

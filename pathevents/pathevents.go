@@ -13,7 +13,7 @@ import (
 
 // Publish publishes filesystem events for pth and path.Join(pth, 'deployments') to the passed bus
 func Publish(ctx context.Context, watcher *fsnotify.Watcher, pths []string, bus pubsub.Bus) error {
-	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout)).With("module", "fsevents")
+	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout)).With("events", "filesystem")
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error {
 		var err error

@@ -23,10 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/avast/retry-go"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ovrclk/akash/provider/cluster"
 	"github.com/ovrclk/akash/provider/gateway"
 	dcli "github.com/ovrclk/akash/x/deployment/client/cli"
 	pmodule "github.com/ovrclk/akash/x/provider"
+	pquery "github.com/ovrclk/akash/x/provider/query"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -105,13 +108,34 @@ func (c *Config) WaitForLeasesAndPollService(dd *DeploymentData, cancel context.
 		case <-tick:
 			if dd.ExpectedLeases() {
 				for _, l := range dd.Leases() {
-					p, err := pclient.Provider(l.Provider)
-					if err != nil {
+
+					var (
+						p   *pquery.Provider
+						err error
+					)
+					if err := retry.Do(func() error {
+						p, err = pclient.Provider(l.Provider)
+						if err != nil {
+							// TODO: Log retry?
+							return err
+						}
+
+						return nil
+					}); err != nil {
+						cancel()
 						return fmt.Errorf("error querying provider: %w", err)
 					}
+
 					// TODO: Move to using service status here?
-					ls, err := gateway.NewClient().LeaseStatus(context.Background(), p.HostURI, l)
-					if err != nil {
+					var ls *cluster.LeaseStatus
+					if err := retry.Do(func() error {
+						ls, err = gateway.NewClient().LeaseStatus(context.Background(), p.HostURI, l)
+						if err != nil {
+							return err
+						}
+						return nil
+					}); err != nil {
+						cancel()
 						return fmt.Errorf("error querying lease status: %w", err)
 					}
 
