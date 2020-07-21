@@ -171,6 +171,7 @@ func (c *Config) TxCreateDeployment(dd *DeploymentData) (err error) {
 	log := logger.With(
 		"hash", res.TxHash,
 		"code", res.Code,
+		"codespace", res.Codespace,
 		"action", "create-deployment",
 		"dseq", dd.DeploymentID.DSeq,
 	)
