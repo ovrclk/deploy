@@ -81,7 +81,9 @@ create-deploy:
 run-provider:
 	@$(SCRIPTS)/provider.sh 
 
-demo: install install-akash-local start-chain create-kind create-provider run-provider create-deploy
+demo: install install-akash start-chain create-kind create-provider run-provider create-deploy
+
+demo-local: install install-akash-local start-chain create-kind create-provider run-provider create-deploy
 
 demo-reset: start-chain create-kind create-provider run-provider create-deploy
 
