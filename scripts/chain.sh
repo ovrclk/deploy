@@ -1,7 +1,7 @@
 #!/bin/bash
 
 AKASH_REPO="$GOPATH/src/github.com/ovrclk/akash"
-AKASH_BRANCH=v0.7.7
+AKASH_BRANCH=v0.7.6
 AKASH_DATA="$(pwd)/data"
 NODE_DATA="$AKASH_DATA/node"
 CLIENT_DATA="$AKASH_DATA/client"
