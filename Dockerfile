@@ -2,8 +2,8 @@
 FROM golang:alpine as build-env
 
 # Copy files into $GOPATH for build
-RUN mkdir -p /go/src/github.com/jackzampolin/deploy
-WORKDIR /go/src/github.com/jackzampolin/deploy
+RUN mkdir -p /go/src/github.com/ovrclk/deploy
+WORKDIR /go/src/github.com/ovrclk/deploy
 
 # Install Deps
 RUN apk add --update git && \
@@ -19,7 +19,7 @@ RUN go build -mod=readonly -o build/deploy cmd/*.go
 FROM alpine:latest
 
 # Copy in files and binary
-COPY --from=build-env  /go/src/github.com/jackzampolin/deploy/build/deploy /usr/bin/deploy
+COPY --from=build-env  /go/src/github.com/ovrclk/deploy/build/deploy /usr/bin/deploy
 
 # Run the server
 CMD ["deploy", "--home", "/tmp/config", "watch"]

@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/jackzampolin/deploy/cmd"
+import "github.com/ovrclk/deploy/cmd"
 
 func main() {
 	cmd.Execute()

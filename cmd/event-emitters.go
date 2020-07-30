@@ -4,9 +4,9 @@ import (
 	"context"
 	"path"
 
-	"github.com/jackzampolin/deploy/pathevents"
 	"github.com/ovrclk/akash/events"
 	"github.com/ovrclk/akash/pubsub"
+	"github.com/ovrclk/deploy/pathevents"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/fsnotify.v1"
 )

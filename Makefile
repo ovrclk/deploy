@@ -21,15 +21,15 @@ install: mod
 	@$(GO) build -mod=readonly -o ${GOBIN}/deploy main.go
 
 docker-build:
-	@docker build -t jackzampolin/deploy:latest .
-	@docker tag jackzampolin/deploy:latest jackzampolin/deploy:${GITSHA}
+	@docker build -t ovrclk/deploy:latest .
+	@docker tag ovrclk/deploy:latest ovrclk/deploy:${GITSHA}
 
 docker-push:
-	@docker push jackzampolin/deploy:latest
-	@docker push jackzampolin/deploy:${GITSHA}
+	@docker push ovrclk/deploy:latest
+	@docker push ovrclk/deploy:${GITSHA}
 
 docker-run: docker-build
-	@docker run -it -v ${HOME}/.akash-deploy:/tmp/config --net=host jackzampolin/deploy:latest
+	@docker run -it -v ${HOME}/.akash-deploy:/tmp/config --net=host ovrclk/deploy:latest
 
 install-deps: mod-download
 	$(GO) install github.com/vektra/mockery/.../

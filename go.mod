@@ -1,4 +1,4 @@
-module github.com/jackzampolin/deploy
+module github.com/ovrclk/deploy
 
 go 1.14
 
