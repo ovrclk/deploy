@@ -7,8 +7,6 @@ services:
     expose:
       - port: 80
         as: 80
-        accept:
-          - hello.localhost
         to:
           - global: true
 

@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 
 	cctx "github.com/cosmos/cosmos-sdk/client/context"
 	"github.com/cosmos/cosmos-sdk/client/flags"
@@ -13,6 +14,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	authclient "github.com/cosmos/cosmos-sdk/x/auth/client/utils"
+	"github.com/cosmos/go-bip39"
 	"github.com/ovrclk/akash/app"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -23,6 +25,7 @@ import (
 var (
 	akashPrefix = "akash"
 	defaultKey  = "default"
+	defaultPass = "12345678"
 )
 
 // Config represents the application configuration
@@ -71,8 +74,11 @@ func (c *Config) GetAccAddress() sdk.AccAddress {
 	sdkConf := sdk.GetConfig()
 	sdkConf.SetBech32PrefixForAccount(akashPrefix, akashPrefix+"pub")
 
-	k, _ := c.keybase.Get(defaultKey)
-	return k.GetAddress()
+	if c.keybase != nil {
+		k, _ := c.keybase.Get(defaultKey)
+		return k.GetAddress()
+	}
+	return nil
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -108,12 +114,19 @@ func initConfig(cmd *cobra.Command) error {
 				os.Exit(1)
 			}
 		}
+	} else if os.IsNotExist(err) {
+		// If the config file doesn't exist, just log and exit
+		fmt.Printf("config file %s doesn't exist\n", cfgPath)
+		return nil
 	}
 	return nil
 }
 
 // validateConfig validates all the props in the config file
 func validateConfig(c *Config) (err error) {
+	// Ensure that codecs exist
+	c.Amino = app.MakeCodec()
+
 	// If we are unable to create a new RPC client (rpc-addr doesn't parse) return err
 	if _, err = rpchttp.New(c.RPCAddr, "/websocket"); err != nil {
 		return
@@ -121,17 +134,15 @@ func validateConfig(c *Config) (err error) {
 
 	// Warn if priv key specified and not exist at given path
 	keypath := path.Join(homePath, c.Keyfile)
-	if os.Stat(keypath); c.Keyfile != "" && err == os.ErrNotExist {
-		return fmt.Errorf("Private key specified in the config file doesn't exist: %s", keypath)
+	if _, err = os.Stat(keypath); os.IsNotExist(err) {
+		fmt.Printf("Private key specified in the config file doesn't exist: %s\n", keypath)
+		return nil
 	}
 
 	// Warn if keypass isn't set or doesn't unlock the given keyfile?
 	if err = c.CreateKeybase(); err != nil {
 		return err
 	}
-
-	// Ensure that codecs exist
-	c.Amino = app.MakeCodec()
 
 	// Set address on the struct
 	c.GetAccAddress()
@@ -161,6 +172,39 @@ func (c *Config) CreateKeybase() (err error) {
 	err = kb.ImportPrivKey(defaultKey, string(byt), c.Keypass)
 	c.keybase = kb
 	return
+}
+
+// CreateKey creates a new private key
+func (c *Config) CreateKey() (err error) {
+	kp := path.Join(homePath, c.Keyfile)
+
+	if _, err := os.Stat(kp); !os.IsNotExist(err) {
+		return fmt.Errorf("keyfile %s already exists", kp)
+	} else {
+		fmt.Printf("Creating %s ...\n", kp)
+	}
+
+	kb := keys.NewInMemory()
+
+	entropySeed, err := bip39.NewEntropy(256)
+	if err != nil {
+		return err
+	}
+	mnemonic, err := bip39.NewMnemonic(entropySeed)
+	if err != nil {
+		return err
+	}
+
+	if _, err = kb.CreateAccount(defaultKey, mnemonic, defaultPass, defaultPass, keys.CreateHDPath(0, 0).String(), keys.Secp256k1); err != nil {
+		return err
+	}
+
+	armor, err := kb.ExportPrivKey(defaultKey, defaultPass, defaultPass)
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(kp, []byte(armor), 0644)
 }
 
 // SendMsgs sends given sdk messages
@@ -226,31 +270,23 @@ func (c *Config) BlockHeight() (uint64, error) {
 	return uint64(status.SyncInfo.LatestBlockHeight), nil
 }
 
-func overWriteConfig(cmd *cobra.Command, cfg *Config) (err error) {
-	if _, err = os.Stat(cfgPath); err == nil {
-		viper.SetConfigFile(cfgPath)
-		if err = viper.ReadInConfig(); err == nil {
-			// ensure validateConfig runs properly
-			err = validateConfig(cfg)
-			if err != nil {
-				return err
-			}
-
-			// marshal the new config
-			out, err := yaml.Marshal(cfg)
-			if err != nil {
-				return err
-			}
-
-			// overwrite the config file
-			err = ioutil.WriteFile(viper.ConfigFileUsed(), out, 0777)
-			if err != nil {
-				return err
-			}
-
-			// reset the global variable
-			config = cfg
-		}
+func writeConfig(cmd *cobra.Command, cfg *Config) (err error) {
+	if err = os.MkdirAll(filepath.Dir(cfgPath), os.ModePerm); err != nil {
+		return
 	}
+	// marshal the new config
+	out, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	// overwrite the config file
+	err = ioutil.WriteFile(cfgPath, out, 0644)
+	if err != nil {
+		return err
+	}
+
+	// reset the global variable
+	config = cfg
 	return
 }

@@ -20,18 +20,23 @@ The demo environment sets up:
 > NOTE: The kube cluster, especially on the first run pulls quite a bit of data locally. Depending on your connection this may take a while.
 
 ```bash
-# First, if you haven't, install the dependancies
-make install-deps
+# First, if you haven't, install the `deploy` binary
+make install
 
-# Then start the demo environment
-# NOTE: this can take a while, please wait for the command to finish
-make demo
+# Next, generate the configuration file
+deploy init
+
+# And a private key
+deploy key-add
+
+# Then, get the address for that key...
+deploy address
+# And get funding over at the faucet
+# https://akash.vitwit.com/faucet
 
 # Then you can start deploying apps!
 # Try the `sample.yaml` file in the root of the repo...
 deploy create sample.yaml
-
-# You app will be available at: http://hello.localhost!
 ```
 
 ### TODOS:
