@@ -24,7 +24,7 @@ The demo environment sets up:
 make install
 
 # Next, generate the configuration file
-deploy init
+deploy init testnet-v4 http://rpc.akashtest.net:26657
 
 # And a private key
 deploy key-add
