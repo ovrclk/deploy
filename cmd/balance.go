@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +30,14 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cliCtx := config.CLICtx(config.NewTMClient())
+		accGetter := types.NewAccountRetriever(cliCtx)
+		acc, err := accGetter.GetAccount(config.GetAccAddress())
+		if err != nil {
+			return err
+		}
+		return cliCtx.PrintOutput(acc)
 	},
 }
 
