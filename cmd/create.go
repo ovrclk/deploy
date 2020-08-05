@@ -31,7 +31,13 @@ import (
 	pmodule "github.com/ovrclk/akash/x/provider"
 	pquery "github.com/ovrclk/akash/x/provider/query"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	flagGasAdj    = "gas-adjustment"
+	flagGasPrices = "gas-prices"
 )
 
 func init() {
@@ -45,6 +51,10 @@ func createCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		Short: "Create a deployment to be managed by the deploy application",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := config.SetGasOnConfigFromFlags(cmd); err != nil {
+				return err
+			}
+
 			log := logger.With("cli", "create")
 			dd, err := NewDeploymentData(args[0], cmd.Flags(), config.GetAccAddress())
 			if err != nil {
@@ -90,7 +100,34 @@ func createCmd() *cobra.Command {
 		},
 	}
 	dcli.AddDeploymentIDFlags(cmd.Flags())
+	rootCmd.PersistentFlags().Float64P(flagGasAdj, "a", 1.0, "gas adjustment for transactions. if your transactions are failing due to out of gas errors increase this number")
+	rootCmd.PersistentFlags().StringP(flagGasPrices, "p", "0.025akash", "price for gas")
+	if err := viper.BindPFlag(flagGasAdj, cmd.Flags().Lookup(flagGasAdj)); err != nil {
+		panic(err)
+	}
+	if err := viper.BindPFlag(flagGasPrices, cmd.Flags().Lookup(flagGasPrices)); err != nil {
+		panic(err)
+	}
 	return cmd
+}
+
+// SetGasOnConfigFromFlags pulls the gas prices and gas adj variables from the flags and sets them on the global config object
+func (c *Config) SetGasOnConfigFromFlags(cmd *cobra.Command) error {
+	gasAdj, err := cmd.Flags().GetFloat64(flagGasAdj)
+	if err != nil {
+		return err
+	}
+	gp, err := cmd.Flags().GetString(flagGasPrices)
+	if err != nil {
+		return err
+	}
+	gasPr, err := sdk.ParseDecCoins(gp)
+	if err != nil {
+		return err
+	}
+	c.gasPrices = gasPr
+	c.gasAdj = gasAdj
+	return nil
 }
 
 // WaitForLeasesAndPollService waits for

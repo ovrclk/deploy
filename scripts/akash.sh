@@ -1,7 +1,7 @@
 #!/bin/bash
 
 AKASH_REPO="$GOPATH/src/github.com/ovrclk/akash"
-AKASH_BRANCH="v0.7.7"
+AKASH_BRANCH="v0.7.8"
 CHAIN_ID="testchain"
 
 # Ensure gopath is set and go is installed

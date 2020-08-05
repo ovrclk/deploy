@@ -35,6 +35,9 @@ type Config struct {
 	Keyfile string `yaml:"keyfile" json:"keyfile"`
 	Keypass string `yaml:"keypass" json:"keypass"`
 
+	gasAdj    float64
+	gasPrices sdk.DecCoins
+
 	keybase keys.Keybase
 	address sdk.AccAddress
 	Amino   *codec.Codec
@@ -234,17 +237,18 @@ func (c *Config) BuildAndSignTx(msgs []sdk.Msg) ([]byte, error) {
 	}
 
 	// Create the transaction builder with some sane defaults
+	// TODO: add some debug output?
 	txBldr = auth.NewTxBuilder(
 		auth.DefaultTxEncoder(c.Amino),
 		acc.GetAccountNumber(),
 		acc.GetSequence(),
 		200000,
-		1.5,
+		c.gasAdj,
 		true,
 		c.ChainID,
 		"",
 		sdk.NewCoins(),
-		sdk.NewDecCoins(sdk.NewDecCoin("akash", sdk.NewInt(25))),
+		c.gasPrices,
 	).WithKeybase(c.keybase)
 
 	// Estimate the gas
@@ -258,6 +262,7 @@ func (c *Config) BuildAndSignTx(msgs []sdk.Msg) ([]byte, error) {
 
 // BroadcastTxCommit takes the marshaled transaction bytes and broadcasts them
 func (c *Config) BroadcastTxCommit(txBytes []byte) (sdk.TxResponse, error) {
+	// TODO: add some debug output?
 	return c.CLICtx(c.NewTMClient()).BroadcastTxCommit(txBytes)
 }
 

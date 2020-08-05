@@ -6,44 +6,31 @@
 
 ### Requirements
 
-* Docker installed and running
-    - [Install Docker](https://docs.docker.com/get-docker/)
 * Go 1.14+ installed and `$GOPATH` + `$GOBIN` setup
     - [Install Go](https://golang.org/doc/install)
 
-### Running the demo environment
+### Creating your first Akash application
 
-The demo environment sets up:
-* A kubernetes cluster in docker using [`kind`](https://github.com/kubernetes-sigs/kind)
-* A running [Akash chain instance](https://github.com/ovrclk/akash)
-
-> NOTE: The kube cluster, especially on the first run pulls quite a bit of data locally. Depending on your connection this may take a while.
+The following commands will deploy your first akash application on the testnet:
 
 ```bash
 # First, if you haven't, install the `deploy` binary
 make install
 
-# Next, generate the configuration file
+# Next, generate the configuration file for the testnet
 deploy init testnet-v4 http://rpc.akashtest.net:26657
 
-# And a private key
+# Create a private key for your deployments...
 deploy key-add
 
-# Then, get the address for that key...
+# ...get the address for the key you just created...
 deploy address
-# And get funding over at the faucet
-# https://akash.vitwit.com/faucet
 
-# Then you can start deploying apps!
+# ...and take it to the faucet: https://akash.vitwit.com/faucet
+# when you have tokens, you will see them using the balance command
+deploy balance
+
+# Once you have some testnet `akash` you can start deploying apps!
 # Try the `sample.yaml` file in the root of the repo...
 deploy create sample.yaml
 ```
-
-### TODOS:
-
-- [ ] Give the deployments user generated names
-- [ ] Add crud for the sdl file database
-- [ ] Add git integration to allow for easy storage of the configuration directory of this repository
-- [ ] Embed some sample deployments into the binary :thinking_face:
-- [ ] Add management for full on-chain deployment lifecycle 
-- [ ] Queries for some state?

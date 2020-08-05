@@ -22,6 +22,7 @@ type DeploymentData struct {
 	DeploymentID dtypes.DeploymentID
 	OrderID      []mtypes.OrderID
 	LeaseID      []mtypes.LeaseID
+	Version      []byte
 
 	sync.RWMutex
 }
@@ -30,8 +31,9 @@ type DeploymentData struct {
 func (dd *DeploymentData) MsgCreate() dtypes.MsgCreateDeployment {
 	// Create the deployment message
 	msg := dtypes.MsgCreateDeployment{
-		ID:     dd.DeploymentID,
-		Groups: make([]dtypes.GroupSpec, 0, len(dd.Groups)),
+		ID:      dd.DeploymentID,
+		Groups:  make([]dtypes.GroupSpec, 0, len(dd.Groups)),
+		Version: dd.Version,
 	}
 
 	// Append the groups to the message
@@ -129,6 +131,10 @@ func NewDeploymentData(file string, flags *pflag.FlagSet, depAddr sdk.AccAddress
 	if err != nil {
 		return nil, err
 	}
+	ver, err := sdl.ManifestVersion(mani)
+	if err != nil {
+		return nil, err
+	}
 	id, err := dcli.DeploymentIDFromFlags(flags, depAddr.String())
 	if err != nil {
 		return nil, err
@@ -146,5 +152,6 @@ func NewDeploymentData(file string, flags *pflag.FlagSet, depAddr sdk.AccAddress
 		DeploymentID: id,
 		OrderID:      make([]mtypes.OrderID, 0),
 		LeaseID:      make([]mtypes.LeaseID, 0),
+		Version:      ver,
 	}, nil
 }

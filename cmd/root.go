@@ -68,8 +68,7 @@ func init() {
 
 	rootCmd.SilenceUsage = true
 
-	// Register top level flags --home and --config
-	// TODO: just rely on homePath and remove the config path arg?
+	// Register top level flags --home and --debug
 	rootCmd.PersistentFlags().StringVar(&homePath, flags.FlagHome, defaultHome, "set home directory")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "debug output")
 	if err := viper.BindPFlag(flags.FlagHome, rootCmd.Flags().Lookup(flags.FlagHome)); err != nil {
