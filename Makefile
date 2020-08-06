@@ -18,7 +18,7 @@ build: mod
 	@$(GO) build -mod=readonly -o build/deploy main.go
 
 install: mod
-	@$(GO) build -mod=readonly -o ${GOBIN}/deploy main.go
+	@$(GO) install -mod=readonly  .
 
 docker-build:
 	@docker build -t ovrclk/deploy:latest .
