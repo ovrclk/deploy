@@ -4,9 +4,9 @@ go 1.14
 
 require (
 	github.com/avast/retry-go v2.6.0+incompatible
-	github.com/cosmos/cosmos-sdk v0.38.5
+	github.com/cosmos/cosmos-sdk v0.40.0-rc3
 	github.com/cosmos/go-bip39 v0.0.0-20180819234021-555e2067c45d
-	github.com/ovrclk/akash v0.7.8
+	github.com/ovrclk/akash v0.9.0-rc2
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.0
