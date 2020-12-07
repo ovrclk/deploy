@@ -25,11 +25,11 @@ import (
 
 	"github.com/avast/retry-go"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/ovrclk/akash/provider/cluster"
+	ctypes "github.com/ovrclk/akash/provider/cluster/types"
 	"github.com/ovrclk/akash/provider/gateway"
 	dcli "github.com/ovrclk/akash/x/deployment/client/cli"
 	pmodule "github.com/ovrclk/akash/x/provider"
-	pquery "github.com/ovrclk/akash/x/provider/query"
+	ptypes "github.com/ovrclk/akash/x/provider/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
@@ -121,11 +121,11 @@ func (c *Config) SetGasOnConfigFromFlags(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	gasPr, err := sdk.ParseDecCoins(gp)
+	_, err = sdk.ParseDecCoins(gp)
 	if err != nil {
 		return err
 	}
-	c.gasPrices = gasPr
+	c.gasPrices = gp
 	c.gasAdj = gasAdj
 	return nil
 }
@@ -147,16 +147,20 @@ func (c *Config) WaitForLeasesAndPollService(dd *DeploymentData, cancel context.
 				for _, l := range dd.Leases() {
 
 					var (
-						p   *pquery.Provider
+						p   *ptypes.Provider
 						err error
 					)
 					if err := retry.Do(func() error {
-						p, err = pclient.Provider(l.Provider)
+						res, err := pclient.Provider(
+							context.Background(),
+							&ptypes.QueryProviderRequest{Owner: l.Provider},
+						)
 						if err != nil {
 							// TODO: Log retry?
 							return err
 						}
 
+						p = &res.Provider
 						return nil
 					}); err != nil {
 						cancel()
@@ -164,7 +168,7 @@ func (c *Config) WaitForLeasesAndPollService(dd *DeploymentData, cancel context.
 					}
 
 					// TODO: Move to using service status here?
-					var ls *cluster.LeaseStatus
+					var ls *ctypes.LeaseStatus
 					if err := retry.Do(func() error {
 						ls, err = gateway.NewClient().LeaseStatus(context.Background(), p.HostURI, l)
 						if err != nil {
@@ -205,6 +209,8 @@ func (c *Config) CreateDeploymentFileInArchive(dd *DeploymentData) error {
 // TxCreateDeployment takes DeploymentData and creates the specified deployment
 func (c *Config) TxCreateDeployment(dd *DeploymentData) (err error) {
 	res, err := c.SendMsgs([]sdk.Msg{dd.MsgCreate()})
+	fmt.Println("Res...", res)
+	fmt.Println("Error...", err)
 	log := logger.With(
 		"hash", res.TxHash,
 		"code", res.Code,

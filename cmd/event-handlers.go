@@ -11,6 +11,7 @@ import (
 	dtypes "github.com/ovrclk/akash/x/deployment/types"
 	mtypes "github.com/ovrclk/akash/x/market/types"
 	pmodule "github.com/ovrclk/akash/x/provider"
+	ptypes "github.com/ovrclk/akash/x/provider/types"
 	"gopkg.in/fsnotify.v1"
 )
 
@@ -25,12 +26,17 @@ func SendManifestHander(dd *DeploymentData) func(pubsub.Event) error {
 		switch event := ev.(type) {
 		// Handle Lease creation events
 		case mtypes.EventLeaseCreated:
-			if addr.Equals(event.ID.Owner) {
+			if addr.String() == event.ID.Owner {
 				pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(config.NewTMClient()))
-				provider, err := pclient.Provider(event.ID.Provider)
+				res, err := pclient.Provider(
+					context.Background(),
+					&ptypes.QueryProviderRequest{Owner: event.ID.Provider},
+				)
 				if err != nil {
 					return err
 				}
+
+				provider := res.Provider
 
 				log.Info("sending manifest to provider", "provider", event.ID.Provider, "uri", provider.HostURI, "dseq", event.ID.DSeq)
 				if err = gateway.NewClient().SubmitManifest(
@@ -79,7 +85,7 @@ func DeploymentDataUpdateHandler(dd *DeploymentData) func(pubsub.Event) error {
 
 		// Handle deployment group close events
 		case dtypes.EventGroupClosed:
-			if event.ID.Owner.Equals(addr) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if event.ID.Owner == addr && event.ID.DSeq == dd.DeploymentID.DSeq {
 				// TODO: Maybe more housekeeping here?
 				log.Info("deployment group closed")
 			}
@@ -87,7 +93,7 @@ func DeploymentDataUpdateHandler(dd *DeploymentData) func(pubsub.Event) error {
 
 		// Handle Order creation events
 		case mtypes.EventOrderCreated:
-			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if addr == event.ID.Owner && event.ID.DSeq == dd.DeploymentID.DSeq {
 				dd.AddOrder(event.ID)
 				log.Info("order for deployment created", "oseq", event.ID.OSeq)
 			}
@@ -95,7 +101,7 @@ func DeploymentDataUpdateHandler(dd *DeploymentData) func(pubsub.Event) error {
 
 		// Handle Order close events
 		case mtypes.EventOrderClosed:
-			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if addr == event.ID.Owner && event.ID.DSeq == dd.DeploymentID.DSeq {
 				dd.RemoveOrder(event.ID)
 				log.Info("order for deployment closed", "oseq", event.ID.OSeq)
 			}
@@ -103,21 +109,21 @@ func DeploymentDataUpdateHandler(dd *DeploymentData) func(pubsub.Event) error {
 
 		// Handle Bid creation events
 		case mtypes.EventBidCreated:
-			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if addr == event.ID.Owner && event.ID.DSeq == dd.DeploymentID.DSeq {
 				log.Info("bid for order created", "oseq", event.ID.OSeq, "price", event.Price)
 			}
 			return
 
 		// Handle Bid close events
 		case mtypes.EventBidClosed:
-			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if addr == event.ID.Owner && event.ID.DSeq == dd.DeploymentID.DSeq {
 				log.Info("bid for order closed", "oseq", event.ID.OSeq, "price", event.Price)
 			}
 			return
 
 		// Handle Lease creation events
 		case mtypes.EventLeaseCreated:
-			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if addr == event.ID.Owner && event.ID.DSeq == dd.DeploymentID.DSeq {
 				dd.AddLease(event.ID)
 				log.Info("lease for order created", "oseq", event.ID.OSeq, "price", event.Price)
 			}
@@ -125,7 +131,7 @@ func DeploymentDataUpdateHandler(dd *DeploymentData) func(pubsub.Event) error {
 
 		// Handle Lease close events
 		case mtypes.EventLeaseClosed:
-			if addr.Equals(event.ID.Owner) && event.ID.DSeq == dd.DeploymentID.DSeq {
+			if addr == event.ID.Owner && event.ID.DSeq == dd.DeploymentID.DSeq {
 				dd.RemoveLease(event.ID)
 				log.Info("lease for order closed", "oseq", event.ID.OSeq, "price", event.Price)
 			}
@@ -145,70 +151,70 @@ func PrintHandler(ev pubsub.Event) (err error) {
 	switch event := ev.(type) {
 	// Handle deployment creation events
 	case dtypes.EventDeploymentCreated:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("deployment created", "dseq", event.ID.DSeq)
 		}
 		return
 
 	// Handle deployment update events
 	case dtypes.EventDeploymentUpdated:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("deployment updated", "dseq", event.ID.DSeq)
 		}
 		return
 
 	// Handle deployment close events
 	case dtypes.EventDeploymentClosed:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("deployment closed", "dseq", event.ID.DSeq)
 		}
 		return
 
 	// Handle deployment group close events
 	case dtypes.EventGroupClosed:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("deployment group closed", "dseq", event.ID.DSeq)
 		}
 		return
 
 	// Handle Order creation events
 	case mtypes.EventOrderCreated:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("order for deployment created", "dseq", event.ID.DSeq, "oseq", event.ID.OSeq)
 		}
 		return
 
 	// Handle Order close events
 	case mtypes.EventOrderClosed:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("order for deployment closed", "dseq", event.ID.DSeq, "oseq", event.ID.OSeq)
 		}
 		return
 
 	// Handle Bid creation events
 	case mtypes.EventBidCreated:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("bid for order created", "dseq", event.ID.DSeq, "oseq", event.ID.OSeq, "price", event.Price)
 		}
 		return
 
 	// Handle Bid close events
 	case mtypes.EventBidClosed:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("bid for order closed", "dseq", event.ID.DSeq, "oseq", event.ID.OSeq, "price", event.Price)
 		}
 		return
 
 	// Handle Lease creation events
 	case mtypes.EventLeaseCreated:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("lease for order created", "dseq", event.ID.DSeq, "oseq", event.ID.OSeq, "price", event.Price)
 		}
 		return
 
 	// Handle Lease close events
 	case mtypes.EventLeaseClosed:
-		if addr.Equals(event.ID.Owner) {
+		if addr.String() == event.ID.Owner {
 			log.Info("lease for order closed", "dseq", event.ID.DSeq, "oseq", event.ID.OSeq, "price", event.Price)
 		}
 		return

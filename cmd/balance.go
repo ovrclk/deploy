@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/spf13/cobra"
 )
 
@@ -32,12 +31,12 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cliCtx := config.CLICtx(config.NewTMClient())
-		accGetter := types.NewAccountRetriever(cliCtx)
-		acc, err := accGetter.GetAccount(config.GetAccAddress())
+		accGetter := cliCtx.AccountRetriever
+		acc, err := accGetter.GetAccount(cliCtx, config.GetAccAddress())
 		if err != nil {
 			return err
 		}
-		return cliCtx.PrintOutput(acc)
+		return cliCtx.PrintOutputLegacy(acc)
 	},
 }
 

@@ -1,19 +1,22 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 
-	cctx "github.com/cosmos/cosmos-sdk/client/context"
+	cctx "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/crypto/keys"
+	"github.com/cosmos/cosmos-sdk/client/tx"
+	"github.com/cosmos/cosmos-sdk/crypto/hd"
+	keys "github.com/cosmos/cosmos-sdk/crypto/keyring"
+	"github.com/cosmos/cosmos-sdk/simapp/params"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth"
-	authclient "github.com/cosmos/cosmos-sdk/x/auth/client/utils"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	authTypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/go-bip39"
 	"github.com/ovrclk/akash/app"
 	"github.com/spf13/cobra"
@@ -25,7 +28,7 @@ import (
 var (
 	akashPrefix = "akash"
 	defaultKey  = "default"
-	defaultPass = "12345678"
+	defaultPass = ""
 )
 
 // Config represents the application configuration
@@ -36,35 +39,67 @@ type Config struct {
 	Keypass string `yaml:"keypass" json:"keypass"`
 
 	gasAdj    float64
-	gasPrices sdk.DecCoins
+	gasPrices string
 
-	keybase keys.Keybase
-	address sdk.AccAddress
-	Amino   *codec.Codec
+	keybase  keys.Keyring
+	address  sdk.AccAddress
+	Encoding params.EncodingConfig `yaml:"-" json:"-"`
+	// Amino   *codec.Codec
 }
 
-// CLICtx returns the CLICtx object with some defaults set
-func (c *Config) CLICtx(client *rpchttp.HTTP) cctx.CLIContext {
-	return cctx.CLIContext{
-		FromAddress:   c.address,
-		Client:        client,
-		ChainID:       c.ChainID,
-		Keybase:       c.keybase,
-		NodeURI:       c.RPCAddr,
-		Input:         os.Stdin,
-		Output:        os.Stdout,
-		OutputFormat:  "json",
-		From:          defaultKey,
-		BroadcastMode: "sync",
-		FromName:      defaultKey,
-		Codec:         c.Amino,
-		TrustNode:     true,
-		UseLedger:     false,
-		Simulate:      false,
-		GenerateOnly:  false,
-		Indent:        true,
-		SkipConfirm:   true,
-	}
+// CLICtx returns the an instance of client.Context with some defaults set
+func (c *Config) CLICtx(client *rpchttp.HTTP) cctx.Context {
+	return cctx.Context{}.
+		WithChainID(c.ChainID).
+		WithJSONMarshaler(c.Encoding.Marshaler).
+		WithInterfaceRegistry(c.Encoding.InterfaceRegistry).
+		WithTxConfig(c.Encoding.TxConfig).
+		WithLegacyAmino(c.Encoding.Amino).
+		WithInput(os.Stdin).
+		WithOutput(os.Stdout).
+		WithNodeURI(c.RPCAddr).
+		WithClient(client).
+		WithAccountRetriever(authTypes.AccountRetriever{}).
+		WithBroadcastMode(flags.BroadcastSync).
+		WithOutputFormat("json").
+		WithKeyring(c.keybase).
+		WithFrom(defaultKey).
+		WithFromName(defaultKey).
+		WithFromAddress(c.address).
+		WithSkipConfirmation(true)
+
+	// 	return cctx.CLIContext{
+	// 	FromAddress:   c.address,
+	// 	Client:        client,
+	// 	ChainID:       c.ChainID,
+	// 	Keybase:       c.keybase,
+	// 	NodeURI:       c.RPCAddr,
+	// 	Input:         os.Stdin,
+	// 	Output:        os.Stdout,
+	// 	OutputFormat:  "json",
+	// 	From:          defaultKey,
+	// 	BroadcastMode: "sync",
+	// 	FromName:      defaultKey,
+	// 	TrustNode:     true,
+	// 	UseLedger:     false,
+	// 	Simulate:      false,
+	// 	GenerateOnly:  false,
+	// 	Indent:        true,
+	// 	SkipConfirm:   true,
+	// }
+}
+
+// TxFactory returns an instance of tx.Factory derived from
+func (c *Config) TxFactory() tx.Factory {
+	ctx := c.CLICtx(c.NewTMClient())
+	return tx.Factory{}.
+		WithAccountRetriever(ctx.AccountRetriever).
+		WithChainID(c.ChainID).
+		WithTxConfig(ctx.TxConfig).
+		WithGasAdjustment(c.gasAdj).
+		WithGasPrices(c.gasPrices).
+		WithKeybase(c.keybase).
+		WithSignMode(signing.SignMode_SIGN_MODE_DIRECT)
 }
 
 // GetAccAddress returns the deployer account address
@@ -78,7 +113,7 @@ func (c *Config) GetAccAddress() sdk.AccAddress {
 	sdkConf.SetBech32PrefixForAccount(akashPrefix, akashPrefix+"pub")
 
 	if c.keybase != nil {
-		k, _ := c.keybase.Get(defaultKey)
+		k, _ := c.keybase.Key(defaultKey)
 		return k.GetAddress()
 	}
 	return nil
@@ -127,8 +162,8 @@ func initConfig(cmd *cobra.Command) error {
 
 // validateConfig validates all the props in the config file
 func validateConfig(c *Config) (err error) {
-	// Ensure that codecs exist
-	c.Amino = app.MakeCodec()
+	// Ensure that encoding exists
+	c.Encoding = app.MakeEncodingConfig()
 
 	// If we are unable to create a new RPC client (rpc-addr doesn't parse) return err
 	if _, err = rpchttp.New(c.RPCAddr, "/websocket"); err != nil {
@@ -198,11 +233,11 @@ func (c *Config) CreateKey() (err error) {
 		return err
 	}
 
-	if _, err = kb.CreateAccount(defaultKey, mnemonic, defaultPass, defaultPass, keys.CreateHDPath(0, 0).String(), keys.Secp256k1); err != nil {
+	if _, err = kb.NewAccount(defaultKey, mnemonic, defaultPass, hd.CreateHDPath(118, 0, 0).String(), hd.Secp256k1); err != nil {
 		return err
 	}
 
-	armor, err := kb.ExportPrivKey(defaultKey, defaultPass, defaultPass)
+	armor, err := kb.ExportPrivKeyArmor(defaultKey, defaultPass)
 	if err != nil {
 		return err
 	}
@@ -211,7 +246,7 @@ func (c *Config) CreateKey() (err error) {
 }
 
 // SendMsgs sends given sdk messages
-func (c *Config) SendMsgs(datagrams []sdk.Msg) (res sdk.TxResponse, err error) {
+func (c *Config) SendMsgs(datagrams []sdk.Msg) (res *sdk.TxResponse, err error) {
 	// validate basic all the msgs
 	for _, msg := range datagrams {
 		if err := msg.ValidateBasic(); err != nil {
@@ -228,47 +263,59 @@ func (c *Config) SendMsgs(datagrams []sdk.Msg) (res sdk.TxResponse, err error) {
 
 // BuildAndSignTx takes messages and builds, signs and marshals a sdk.Tx to prepare it for broadcast
 func (c *Config) BuildAndSignTx(msgs []sdk.Msg) ([]byte, error) {
-	// Fetch account and sequence numbers for the account
-	var txBldr auth.TxBuilder
+	// Instantiate the client context
 	ctx := c.CLICtx(c.NewTMClient())
-	acc, err := auth.NewAccountRetriever(ctx).GetAccount(c.GetAccAddress())
+
+	// Query account details
+	txf, err := tx.PrepareFactory(ctx, c.TxFactory())
 	if err != nil {
+		fmt.Println("Error Prepare...", err)
 		return nil, err
 	}
 
-	// Create the transaction builder with some sane defaults
-	// TODO: add some debug output?
-	txBldr = auth.NewTxBuilder(
-		auth.DefaultTxEncoder(c.Amino),
-		acc.GetAccountNumber(),
-		acc.GetSequence(),
-		200000,
-		c.gasAdj,
-		true,
-		c.ChainID,
-		"",
-		sdk.NewCoins(),
-		c.gasPrices,
-	).WithKeybase(c.keybase)
-
-	// Estimate the gas
-	if txBldr, err = authclient.EnrichWithGas(txBldr, ctx, msgs); err != nil {
+	// If users pass gas adjustment, then calculate gas
+	_, adjusted, err := tx.CalculateGas(ctx.QueryWithData, txf, msgs...)
+	if err != nil {
+		fmt.Println("Error CalculateGas...", err)
 		return nil, err
 	}
 
-	// Return nil or the signature error
-	return txBldr.BuildAndSign(defaultKey, c.Keypass, msgs)
+	// Set the gas amount on the transaction factory
+	txf = txf.WithGas(adjusted)
+
+	// Build the transaction builder
+	txb, err := tx.BuildUnsignedTx(txf, msgs...)
+	if err != nil {
+		fmt.Println("Error Unsigned...", err)
+		return nil, err
+	}
+
+	// Attach the signature to the transaction
+	err = tx.Sign(txf, defaultKey, txb)
+	if err != nil {
+		fmt.Println("Error Sign...", err)
+		return nil, err
+	}
+
+	// Generate the transaction bytes
+	txBytes, err := ctx.TxConfig.TxEncoder()(txb.GetTx())
+	if err != nil {
+		fmt.Println("Error Bytes...", err)
+		return nil, err
+	}
+
+	return txBytes, nil
 }
 
 // BroadcastTxCommit takes the marshaled transaction bytes and broadcasts them
-func (c *Config) BroadcastTxCommit(txBytes []byte) (sdk.TxResponse, error) {
+func (c *Config) BroadcastTxCommit(txBytes []byte) (*sdk.TxResponse, error) {
 	// TODO: add some debug output?
-	return c.CLICtx(c.NewTMClient()).BroadcastTxCommit(txBytes)
+	return c.CLICtx(c.NewTMClient()).BroadcastTx(txBytes)
 }
 
 // BlockHeight returns the current block height from the configured client
 func (c *Config) BlockHeight() (uint64, error) {
-	status, err := c.NewTMClient().Status()
+	status, err := c.NewTMClient().Status(context.Background())
 	if err != nil {
 		return 0, err
 	}

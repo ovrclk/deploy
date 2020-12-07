@@ -28,9 +28,9 @@ type DeploymentData struct {
 }
 
 // MsgCreate constructor for MsgCreateDeployment
-func (dd *DeploymentData) MsgCreate() dtypes.MsgCreateDeployment {
+func (dd *DeploymentData) MsgCreate() *dtypes.MsgCreateDeployment {
 	// Create the deployment message
-	msg := dtypes.MsgCreateDeployment{
+	msg := &dtypes.MsgCreateDeployment{
 		ID:      dd.DeploymentID,
 		Groups:  make([]dtypes.GroupSpec, 0, len(dd.Groups)),
 		Version: dd.Version,
@@ -108,7 +108,7 @@ func (dd *DeploymentData) RemoveLease(order mtypes.LeaseID) {
 func NewDeploymentDataFromConfig() *DeploymentData {
 	return &DeploymentData{
 		DeploymentID: dtypes.DeploymentID{
-			Owner: config.GetAccAddress(),
+			Owner: config.GetAccAddress().String(),
 		},
 	}
 }
