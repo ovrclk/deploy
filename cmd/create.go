@@ -101,7 +101,7 @@ func createCmd() *cobra.Command {
 	}
 	dcli.AddDeploymentIDFlags(cmd.Flags())
 	rootCmd.PersistentFlags().Float64P(flagGasAdj, "a", 1.0, "gas adjustment for transactions. if your transactions are failing due to out of gas errors increase this number")
-	rootCmd.PersistentFlags().StringP(flagGasPrices, "p", "0.025akash", "price for gas")
+	rootCmd.PersistentFlags().StringP(flagGasPrices, "p", "0.025uakt", "price for gas")
 	if err := viper.BindPFlag(flagGasAdj, cmd.Flags().Lookup(flagGasAdj)); err != nil {
 		panic(err)
 	}
@@ -134,12 +134,12 @@ func (c *Config) SetGasOnConfigFromFlags(cmd *cobra.Command) error {
 func (c *Config) WaitForLeasesAndPollService(dd *DeploymentData, cancel context.CancelFunc) error {
 	log := logger
 	pclient := pmodule.AppModuleBasic{}.GetQueryClient(config.CLICtx(config.NewTMClient()))
-	timeout := time.After(90 * time.Second)
+	timeout := time.After(150 * time.Second)
 	tick := time.Tick(500 * time.Millisecond)
 	for {
 		select {
 		case <-timeout:
-			log.Info("timed out (90s) listening for deployment to be available")
+			log.Info("timed out (150s) listening for deployment to be available")
 			cancel()
 			return nil
 		case <-tick:
@@ -209,8 +209,6 @@ func (c *Config) CreateDeploymentFileInArchive(dd *DeploymentData) error {
 // TxCreateDeployment takes DeploymentData and creates the specified deployment
 func (c *Config) TxCreateDeployment(dd *DeploymentData) (err error) {
 	res, err := c.SendMsgs([]sdk.Msg{dd.MsgCreate()})
-	fmt.Println("Res...", res)
-	fmt.Println("Error...", err)
 	log := logger.With(
 		"hash", res.TxHash,
 		"code", res.Code,

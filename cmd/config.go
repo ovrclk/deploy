@@ -28,7 +28,7 @@ import (
 var (
 	akashPrefix = "akash"
 	defaultKey  = "default"
-	defaultPass = ""
+	defaultPass = "12345678"
 )
 
 // Config represents the application configuration
@@ -183,7 +183,7 @@ func validateConfig(c *Config) (err error) {
 	}
 
 	// Set address on the struct
-	c.GetAccAddress()
+	c.address = c.GetAccAddress()
 
 	return
 }
@@ -269,14 +269,12 @@ func (c *Config) BuildAndSignTx(msgs []sdk.Msg) ([]byte, error) {
 	// Query account details
 	txf, err := tx.PrepareFactory(ctx, c.TxFactory())
 	if err != nil {
-		fmt.Println("Error Prepare...", err)
 		return nil, err
 	}
 
 	// If users pass gas adjustment, then calculate gas
 	_, adjusted, err := tx.CalculateGas(ctx.QueryWithData, txf, msgs...)
 	if err != nil {
-		fmt.Println("Error CalculateGas...", err)
 		return nil, err
 	}
 
@@ -286,21 +284,18 @@ func (c *Config) BuildAndSignTx(msgs []sdk.Msg) ([]byte, error) {
 	// Build the transaction builder
 	txb, err := tx.BuildUnsignedTx(txf, msgs...)
 	if err != nil {
-		fmt.Println("Error Unsigned...", err)
 		return nil, err
 	}
 
 	// Attach the signature to the transaction
 	err = tx.Sign(txf, defaultKey, txb)
 	if err != nil {
-		fmt.Println("Error Sign...", err)
 		return nil, err
 	}
 
 	// Generate the transaction bytes
 	txBytes, err := ctx.TxConfig.TxEncoder()(txb.GetTx())
 	if err != nil {
-		fmt.Println("Error Bytes...", err)
 		return nil, err
 	}
 
